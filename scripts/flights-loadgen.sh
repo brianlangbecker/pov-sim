@@ -23,7 +23,7 @@ LINE_SEPARATOR="----------------------------------------------------------"
 DEFAULT_ERROR_RATE=0
 DEFAULT_DURATION=60
 LOCAL_BASE_URL="http://localhost:5001"
-ORBSTACK_BASE_URL="http://flights.default.svc.cluster.local:5001"
+ORBSTACK_BASE_URL="http://flights.povsim.svc.cluster.local:5001"
 DEFAULT_BASE_URL=$LOCAL_BASE_URL
 
 BASIC_GET_ENDPOINTS=(

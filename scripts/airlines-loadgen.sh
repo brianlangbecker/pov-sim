@@ -23,7 +23,7 @@ LINE_SEPARATOR="----------------------------------------------------------"
 DEFAULT_ERROR_RATE=0
 DEFAULT_DURATION=60
 LOCAL_BASE_URL="http://localhost:8080"
-ORBSTACK_BASE_URL="http://airlines.default.svc.cluster.local:8080"
+ORBSTACK_BASE_URL="http://airlines.povsim.svc.cluster.local:8080"
 DEFAULT_BASE_URL=$LOCAL_BASE_URL
 
 BASIC_GET_ENDPOINTS=(

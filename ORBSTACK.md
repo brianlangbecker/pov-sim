@@ -16,9 +16,9 @@ This application comprises the following services:
 
 | Name | Description | Tech | Quick Link |
 | :---: | :---: | :---: | :---: |
-| `airlines` | Backend service | Java Spring Boot app | http://airlines.default.svc.cluster.local:8080/swagger-ui/index.html#/ |
-| `flights` | Backend service | Python Flask app | http://flights.default.svc.cluster.local:5001/apidocs/ |
-| `frontend` | Frontend service | React app | http://frontend.default.svc.cluster.local:3000/ |
+| `airlines` | Backend service | Java Spring Boot app | http://airlines.povsim.svc.cluster.local:8080/swagger-ui/index.html#/ |
+| `flights` | Backend service | Python Flask app | http://flights.povsim.svc.cluster.local:5001/apidocs/ |
+| `frontend` | Frontend service | React app | http://frontend.povsim.svc.cluster.local:3000/ |
 |||
 
 The `frontend` service is a simple React app that makes API requests to both the `airlines` and `flights` services.
@@ -42,8 +42,8 @@ From the project root, build the Docker images:
 docker build -t pov-sim-airlines:latest ./airlines
 docker build -t pov-sim-flights:latest ./flights
 docker build \
-  --build-arg REACT_APP_AIRLINES_API_URL=http://airlines.default.svc.cluster.local:8080/airlines \
-  --build-arg REACT_APP_FLIGHTS_API_URL=http://flights.default.svc.cluster.local:5001/flights \
+  --build-arg REACT_APP_AIRLINES_API_URL=http://airlines.povsim.svc.cluster.local:8080/airlines \
+  --build-arg REACT_APP_FLIGHTS_API_URL=http://flights.povsim.svc.cluster.local:5001/flights \
   -t pov-sim-frontend:latest ./frontend
 ```
 
@@ -52,9 +52,9 @@ Deploy all services with the following command:
 helm upgrade --install pov-sim ./helm-charts/pov-sim
 ```
 
-- *The `airlines` service will run on http://airlines.default.svc.cluster.local:8080/ with Swagger doc UI at http://airlines.default.svc.cluster.local:8080/swagger-ui/index.html#/*
-- *The `flights` service will run on http://flights.default.svc.cluster.local:5001/ with Swagger doc UI at http://flights.default.svc.cluster.local:5001/apidocs/*
-- *The `frontend` service will run on http://frontend.default.svc.cluster.local:3000/*
+- *The `airlines` service will run on http://airlines.povsim.svc.cluster.local:8080/ with Swagger doc UI at http://airlines.povsim.svc.cluster.local:8080/swagger-ui/index.html#/*
+- *The `flights` service will run on http://flights.povsim.svc.cluster.local:5001/ with Swagger doc UI at http://flights.povsim.svc.cluster.local:5001/apidocs/*
+- *The `frontend` service will run on http://frontend.povsim.svc.cluster.local:3000/*
 
 Confirm all pods are running:
 ```

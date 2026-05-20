@@ -2,6 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: flights
+  namespace: povsim
   labels:
     app: flights
     {{- include "pov-sim.labels" . | nindent 4 }}
