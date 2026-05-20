@@ -71,6 +71,11 @@ helm uninstall pov-sim
 
 This repo includes a pre-configured values file for the [Grafana k8s Monitoring](https://grafana.com/docs/grafana-cloud/monitor-infrastructure/kubernetes-monitoring/) Helm chart that ships telemetry (metrics, logs, traces, profiles) to Grafana Cloud.
 
+Install `gettext` if you don't have it (provides `envsubst`):
+```
+brew install gettext
+```
+
 Add the Grafana Helm repo if you haven't already:
 ```
 helm repo add grafana https://grafana.github.io/helm-charts && helm repo update
