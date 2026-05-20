@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: airlines
+  labels:
+    app: airlines
+    {{- include "pov-sim.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    app: airlines
+  ports:
+    - port: {{ .Values.airlines.port }}
+      targetPort: {{ .Values.airlines.port }}

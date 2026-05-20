@@ -1,0 +1,26 @@
+airlines:
+  image:
+    repository: pov-sim-airlines
+    tag: latest
+    pullPolicy: Never
+  port: 8080
+  replicas: 1
+
+flights:
+  image:
+    repository: pov-sim-flights
+    tag: latest
+    pullPolicy: Never
+  port: 5001
+  replicas: 1
+
+frontend:
+  image:
+    repository: pov-sim-frontend
+    tag: latest
+    pullPolicy: Never
+  port: 3000
+  replicas: 1
+
+ingress:
+  host: pov-sim.local

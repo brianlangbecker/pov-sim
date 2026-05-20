@@ -1,0 +1,10 @@
+apiVersion: v2
+name: pov-sim
+description: PoV Sim - airlines, flights, and frontend services
+version: 0.1.0
+appVersion: "2.0"
+
+dependencies:
+  - name: ingress-nginx
+    version: "4.10.1"
+    repository: https://kubernetes.github.io/ingress-nginx

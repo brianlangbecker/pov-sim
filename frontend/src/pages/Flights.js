@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import axios from "axios";
 import "./Flights.css";
 
-const FLIGHTS_API_URL = "http://localhost:5001/flights";
+const FLIGHTS_API_URL = process.env.REACT_APP_FLIGHTS_API_URL || "http://localhost:5001/flights";
 const AIRLINES = ["AA", "DL", "UA"];
 
 function Flights() {

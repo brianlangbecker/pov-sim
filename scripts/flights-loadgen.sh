@@ -1,13 +1,16 @@
 #!/bin/bash
 
 # USAGE
-# 
+#
 # This script allows you to make batch requests to the flights service
 #
 # Note: You may need to run `chmod +x flights-loadgen.sh` in order to execute the script
 #
 # To run the script:
 # ./flights-loadgen.sh
+#
+# Target OrbStack:
+# ./flights-loadgen.sh -t orbstack
 #
 # Specify a 25% error rate, 30 sec duration, and base URL:
 # ./flights-loadgen.sh -e 0.25 -d 30 -b http://localhost:5001
@@ -19,7 +22,9 @@ LINE_SEPARATOR="----------------------------------------------------------"
 
 DEFAULT_ERROR_RATE=0
 DEFAULT_DURATION=60
-DEFAULT_BASE_URL="http://localhost:5001"
+LOCAL_BASE_URL="http://localhost:5001"
+ORBSTACK_BASE_URL="http://flights.default.svc.cluster.local:5001"
+DEFAULT_BASE_URL=$LOCAL_BASE_URL
 
 BASIC_GET_ENDPOINTS=(
     "/"
@@ -47,10 +52,11 @@ POST_FLIGHT_FLIGHT_NUMS=(
 POST_FLIGHT_RAISE_QUERY_PARAM="&raise=500"
 
 usage() {
-    echo "Usage: $0 [-e error_rate] [-d duration_secs] [-b base_url]"
+    echo "Usage: $0 [-t target] [-e error_rate] [-d duration_secs] [-b base_url]"
+    echo "  -t  Target environment: local (default) or orbstack"
     echo "  -e  Rate of requests that should error, expressed as a decimal in the range [0.0, 1.0] (default = ${DEFAULT_ERROR_RATE})"
     echo "  -d  Duration of the test in seconds (default = ${DEFAULT_DURATION})"
-    echo "  -b  Base URL of the service (default = ${DEFAULT_BASE_URL})"
+    echo "  -b  Base URL of the service, overrides -t (default = ${DEFAULT_BASE_URL})"
     echo "  -h  Show this help message"
     exit 1
 }
@@ -59,8 +65,15 @@ ERROR_RATE=$DEFAULT_ERROR_RATE
 DURATION=$DEFAULT_DURATION
 BASE_URL=$DEFAULT_BASE_URL
 
-while getopts "e:d:b:h" opt; do
+while getopts "t:e:d:b:h" opt; do
     case $opt in
+        t)
+            case "$OPTARG" in
+                local)    BASE_URL=$LOCAL_BASE_URL ;;
+                orbstack) BASE_URL=$ORBSTACK_BASE_URL ;;
+                *) echo "Unknown target: $OPTARG. Use 'local' or 'orbstack'."; exit 1 ;;
+            esac
+            ;;
         e) ERROR_RATE="$OPTARG" ;;
         d) DURATION="$OPTARG" ;;
         b) BASE_URL="$OPTARG" ;;

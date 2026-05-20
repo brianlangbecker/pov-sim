@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: flights
+  labels:
+    app: flights
+    {{- include "pov-sim.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.flights.replicas }}
+  selector:
+    matchLabels:
+      app: flights
+  template:
+    metadata:
+      labels:
+        app: flights
+    spec:
+      containers:
+        - name: flights
+          image: "{{ .Values.flights.image.repository }}:{{ .Values.flights.image.tag }}"
+          imagePullPolicy: {{ .Values.flights.image.pullPolicy }}
+          ports:
+            - containerPort: {{ .Values.flights.port }}

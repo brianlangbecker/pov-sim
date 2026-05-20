@@ -13,6 +13,11 @@ RUN npm install
 # Copy the rest of the application code
 COPY . .
 
+ARG REACT_APP_AIRLINES_API_URL=http://localhost:8080/airlines
+ARG REACT_APP_FLIGHTS_API_URL=http://localhost:5001/flights
+ENV REACT_APP_AIRLINES_API_URL=$REACT_APP_AIRLINES_API_URL
+ENV REACT_APP_FLIGHTS_API_URL=$REACT_APP_FLIGHTS_API_URL
+
 # Expose the port on which the app will run
 EXPOSE 3000
 

@@ -6,7 +6,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.bind.annotation.CrossOrigin;
 
 @RestController
-@CrossOrigin(origins = "http://localhost:3000") // Allow requests from React app
+@CrossOrigin(origins = {"http://localhost:3000", "http://frontend.default.svc.cluster.local:3000"})
 public class AirlinesController {
 	private static String[] airlines = { "AA", "DL", "UA" };
 

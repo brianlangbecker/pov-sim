@@ -11,7 +11,7 @@ COPY . .
 RUN gradle clean bootJar
 
 # Step 2: Use a lightweight JDK image for running the app
-FROM openjdk:17-jdk-slim
+FROM eclipse-temurin:17-jdk-jammy
 
 # Set the working directory for the runtime container
 WORKDIR /app
