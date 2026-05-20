@@ -6,6 +6,7 @@ Welcome to the PoV Flight Simulator (OrbStack + Helm edition)
 - [Getting Up and Running](#getting-up-and-running)
   - [Prerequisites](#prerequisites)
   - [Deploy all services](#deploy-all-services)
+- [Install Grafana k8s Monitoring](#install-grafana-k8s-monitoring)
 - [Simulate traffic to the services](#simulate-traffic-to-the-services)
   - [airlines-loadgen](#running-airlines-loadgen)
   - [flights-loadgen](#running-flights-loadgen)
@@ -65,6 +66,42 @@ Tear down all services with the following command:
 ```
 helm uninstall pov-sim
 ```
+
+# Install Alloy for Kubernetes
+
+This repo includes a pre-configured values file for the [Grafana k8s Monitoring](https://grafana.com/docs/grafana-cloud/monitor-infrastructure/kubernetes-monitoring/) Helm chart that ships telemetry (metrics, logs, traces, profiles) to Grafana Cloud.
+
+Add the Grafana Helm repo if you haven't already:
+```
+helm repo add grafana https://grafana.github.io/helm-charts && helm repo update
+```
+
+Copy `alloy/.env.example` to `alloy/.env` and fill in your credentials:
+```
+cp alloy/.env.example alloy/.env
+```
+
+Install using the values file in `alloy/`, with credentials sourced from `alloy/.env`:
+```
+set -a && source alloy/.env && set +a && \
+  envsubst < alloy/povsim-k8s-monitoring-values.yaml | \
+  helm upgrade --install --atomic --timeout 300s grafana-k8s-monitoring grafana/k8s-monitoring \
+  --version "^4" --namespace "povsim" --create-namespace \
+  --values -
+```
+
+Confirm the collectors are running:
+```
+kubectl get pods -n povsim | grep alloy
+```
+
+Once installed, configure your applications to send telemetry to the following endpoints:
+
+| Protocol | Endpoint |
+| :---: | :---: |
+| OTLP gRPC | `http://grafana-k8s-monitoring-alloy-receiver.povsim.svc.cluster.local:4317` |
+| OTLP HTTP | `http://grafana-k8s-monitoring-alloy-receiver.povsim.svc.cluster.local:4318` |
+| Zipkin | `http://grafana-k8s-monitoring-alloy-receiver.povsim.svc.cluster.local:9411` |
 
 # Simulate traffic to the services
 
