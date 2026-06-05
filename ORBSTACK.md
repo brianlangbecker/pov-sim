@@ -174,3 +174,17 @@ From the `scripts/` directory:
   ```
   ./flights-loadgen.sh -t orbstack -e 0.25 -d 120
   ```
+
+## Running both loadgens together (10 minutes, 25% error rate)
+
+From the `scripts/` directory, run both loadgens in parallel for 10 minutes
+(600 seconds) at a 25% error rate against the OrbStack deployment:
+
+```
+./airlines-loadgen.sh -t orbstack -e 0.25 -d 600 & \
+./flights-loadgen.sh  -t orbstack -e 0.25 -d 600 & \
+wait
+```
+
+Tweak the rate by changing `-e` (e.g. `-e 0.10` for 10%, `-e 0.50` for 50%).
+Tweak the duration by changing `-d` (seconds). Press `Ctrl+C` to stop both early.

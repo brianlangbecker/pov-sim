@@ -3,21 +3,21 @@ cluster:
 destinations:
   grafana-cloud-metrics:
     type: prometheus
-    url: https://prometheus-us-central2.grafana.net./api/prom/push
+    url: https://prometheus-us-central2.grafana.net/api/prom/push
     auth:
       type: basic
       username: "${GRAFANA_METRICS_USERNAME}"
       password: "${GRAFANA_CLOUD_TOKEN}"
   grafana-cloud-logs:
     type: loki
-    url: https://logs-prod-037.grafana.net./loki/api/v1/push
+    url: https://logs-prod-037.grafana.net/loki/api/v1/push
     auth:
       type: basic
       username: "${GRAFANA_LOGS_USERNAME}"
       password: "${GRAFANA_CLOUD_TOKEN}"
   gc-otlp-endpoint:
     type: otlp
-    url: https://otlp-gateway-us-central2.grafana.net./otlp
+    url: https://otlp-gateway-us-central2.grafana.net/otlp
     protocol: http
     auth:
       type: basic
@@ -31,7 +31,7 @@ destinations:
       enabled: true
   grafana-cloud-profiles:
     type: pyroscope
-    url: https://profiles-prod-026.grafana.net.:443
+    url: https://profiles-prod-026.grafana.net:443
     auth:
       type: basic
       username: "${GRAFANA_STACK_ID}"
@@ -39,6 +39,23 @@ destinations:
 clusterMetrics:
   enabled: true
   collector: alloy-metrics
+  kubelet:
+    enabled: true
+  cadvisor:
+    enabled: true
+    metricsTuning:
+      useDefaultAllowList: true
+      includeMetrics:
+        - container_cpu_usage_seconds_total
+        - container_memory_usage_bytes
+        - container_memory_working_set_bytes
+        - container_memory_rss
+        - container_spec_cpu_quota
+        - container_spec_cpu_period
+        - container_fs_reads_bytes_total
+        - container_fs_writes_bytes_total
+        - container_network_receive_bytes_total
+        - container_network_transmit_bytes_total
 hostMetrics:
   enabled: true
   collector: alloy-metrics
@@ -88,6 +105,8 @@ autoInstrumentation:
 profiling:
   enabled: true
   collector: alloy-profiles
+  ebpf:
+    enabled: true
 collectors:
   alloy-metrics:
     presets:
@@ -132,6 +151,6 @@ telemetryServices:
       prometheus:
         existingSecretName: grafana-cloud-metrics-grafana-k8s-monitoring
         external:
-          url: https://prometheus-us-central2.grafana.net./api/prom
+          url: https://prometheus-us-central2.grafana.net/api/prom
   kepler:
     deploy: true
