@@ -22,3 +22,18 @@ spec:
           imagePullPolicy: {{ .Values.flights.image.pullPolicy }}
           ports:
             - containerPort: {{ .Values.flights.port }}
+          env:
+            - name: PYROSCOPE_APPLICATION_NAME
+              value: flights
+            - name: PYROSCOPE_SERVER_ADDRESS
+              value: https://profiles-prod-026.grafana.net:443
+            - name: PYROSCOPE_BASIC_AUTH_USER
+              valueFrom:
+                secretKeyRef:
+                  name: grafana-cloud-profiles-grafana-k8s-monitoring
+                  key: username
+            - name: PYROSCOPE_BASIC_AUTH_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: grafana-cloud-profiles-grafana-k8s-monitoring
+                  key: password

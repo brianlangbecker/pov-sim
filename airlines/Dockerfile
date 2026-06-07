@@ -14,6 +14,9 @@ WORKDIR /app
 # Download the OpenTelemetry Java agent
 ADD https://github.com/open-telemetry/opentelemetry-java-instrumentation/releases/latest/download/opentelemetry-javaagent.jar /app/opentelemetry-javaagent.jar
 
+# Download the Pyroscope Java agent
+ADD https://github.com/grafana/pyroscope-java/releases/download/v2.1.2/pyroscope.jar /app/pyroscope.jar
+
 # Copy the JAR file from the build stage
 COPY --from=build /app/build/libs/*.jar app.jar
 
@@ -28,4 +31,4 @@ ENV OTEL_TRACES_EXPORTER="otlp"
 
 EXPOSE 8080
 
-ENTRYPOINT ["java", "-javaagent:/app/opentelemetry-javaagent.jar", "-jar", "app.jar"]
+ENTRYPOINT ["java", "-javaagent:/app/opentelemetry-javaagent.jar", "-javaagent:/app/pyroscope.jar", "-jar", "app.jar"]

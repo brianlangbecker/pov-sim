@@ -1,7 +1,18 @@
+import os
+
+import pyroscope
 from flasgger import Swagger
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 from utils import get_random_int
+
+pyroscope.configure(
+    application_name=os.environ.get("PYROSCOPE_APPLICATION_NAME", "flights"),
+    server_address=os.environ.get("PYROSCOPE_SERVER_ADDRESS", "http://pyroscope:4040"),
+    basic_auth_username=os.environ.get("PYROSCOPE_BASIC_AUTH_USER"),
+    basic_auth_password=os.environ.get("PYROSCOPE_BASIC_AUTH_PASSWORD"),
+    enable_logging=True,
+)
 
 app = Flask(__name__)
 Swagger(app)
