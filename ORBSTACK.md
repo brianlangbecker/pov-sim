@@ -5,11 +5,29 @@ Welcome to the PoV Flight Simulator (OrbStack + Helm edition)
 - [About](#about)
 - [Getting Up and Running](#getting-up-and-running)
   - [Prerequisites](#prerequisites)
-  - [Deploy all services](#deploy-all-services)
-- [Install Grafana k8s Monitoring](#install-grafana-k8s-monitoring)
+  - [Step 1 — Install Grafana k8s Monitoring (Alloy)](#step-1--install-grafana-k8s-monitoring-alloy)
+  - [Step 2 — Build the app images](#step-2--build-the-app-images)
+  - [Step 3 — Deploy pov-sim](#step-3--deploy-pov-sim)
+  - [Step 4 — (OrbStack only) Deploy standalone cAdvisor](#step-4--orbstack-only-deploy-standalone-cadvisor)
+  - [Step 5 — Verify the website is running](#step-5--verify-the-website-is-running)
 - [Simulate traffic to the services](#simulate-traffic-to-the-services)
   - [airlines-loadgen](#running-airlines-loadgen)
   - [flights-loadgen](#running-flights-loadgen)
+- [Appendix — Full Uninstall / Clean Slate](#appendix--full-uninstall--clean-slate)
+  - [A1 — Uninstall the apps (pov-sim)](#a1--uninstall-the-apps-pov-sim)
+  - [A2 — Remove standalone cAdvisor](#a2--remove-standalone-cadvisor-orbstack-only)
+  - [A3 — Uninstall Grafana k8s Monitoring (Alloy)](#a3--uninstall-grafana-k8s-monitoring-alloy)
+  - [A4 — Delete the namespace](#a4--delete-the-namespace)
+  - [A5 — Clean up cluster-scoped orphans](#a5--clean-up-cluster-scoped-orphans)
+  - [A6 — Force-terminate a stuck namespace](#a6--force-terminate-a-stuck-namespace)
+  - [A7 — Verify everything is gone](#a7--verify-everything-is-gone)
+  - [A8 — One-shot uninstall script](#a8--one-shot-uninstall-script-advanced)
+
+> **Install order matters.** The pov-sim deployments reference a Pyroscope
+> auth Secret (`grafana-cloud-profiles-grafana-k8s-monitoring`) that is
+> created by the Grafana k8s-monitoring chart. **Install k8s-monitoring
+> before pov-sim** or the app pods will fail with `CreateContainerConfigError: secret "grafana-cloud-profiles-grafana-k8s-monitoring" not found`.
+> See [PROFILES.md](./PROFILES.md) for the full profiling setup.
 
 # About
 
@@ -36,38 +54,14 @@ The `frontend` service is a simple React app that makes API requests to both the
 git clone https://github.com/aninamu/pov-sim.git
 ```
 
-## Deploy all services
+## Step 1 — Install Grafana k8s Monitoring (Alloy)
 
-From the project root, build the Docker images:
-```
-docker build -t pov-sim-airlines:latest ./airlines
-docker build -t pov-sim-flights:latest ./flights
-docker build \
-  --build-arg REACT_APP_AIRLINES_API_URL=http://airlines.povsim.svc.cluster.local:8080/airlines \
-  --build-arg REACT_APP_FLIGHTS_API_URL=http://flights.povsim.svc.cluster.local:5001/flights \
-  -t pov-sim-frontend:latest ./frontend
-```
-
-Deploy all services with the following command:
-```
-helm upgrade --install pov-sim ./helm-charts/pov-sim
-```
-
-- *The `airlines` service will run on http://airlines.povsim.svc.cluster.local:8080/ with Swagger doc UI at http://airlines.povsim.svc.cluster.local:8080/swagger-ui/index.html#/*
-- *The `flights` service will run on http://flights.povsim.svc.cluster.local:5001/ with Swagger doc UI at http://flights.povsim.svc.cluster.local:5001/apidocs/*
-- *The `frontend` service will run on http://frontend.povsim.svc.cluster.local:3000/*
-
-Confirm all pods are running:
-```
-kubectl get pods
-```
-
-Tear down all services with the following command:
-```
-helm uninstall pov-sim
-```
-
-# Install Alloy for Kubernetes
+**Do this first.** It creates the `povsim` namespace (via
+`--create-namespace`) and the
+`grafana-cloud-profiles-grafana-k8s-monitoring` Secret that the app
+deployments need for Pyroscope basic-auth credentials. The pov-sim
+chart deliberately does *not* create the namespace itself — Step 1 owns
+it, and Helm will refuse to adopt a namespace it didn't create.
 
 This repo includes a pre-configured values file for the [Grafana k8s Monitoring](https://grafana.com/docs/grafana-cloud/monitor-infrastructure/kubernetes-monitoring/) Helm chart that ships telemetry (metrics, logs, traces, profiles) to Grafana Cloud.
 
@@ -95,18 +89,124 @@ set -a && source alloy/.env && set +a && \
   --values -
 ```
 
-Confirm the collectors are running:
+Confirm the collectors are running and the Pyroscope secret exists:
 ```
-kubectl get pods -n povsim | grep alloy
+kubectl get pods   -n povsim | grep alloy
+kubectl get secret -n povsim grafana-cloud-profiles-grafana-k8s-monitoring
 ```
 
-Once installed, configure your applications to send telemetry to the following endpoints:
+Both must succeed before moving on. The app pods reference that secret
+by name and will crash-loop until it exists.
+
+Once installed, the apps send telemetry to these endpoints (already
+wired into the airlines, flights, and chart templates):
 
 | Protocol | Endpoint |
 | :---: | :---: |
 | OTLP gRPC | `http://grafana-k8s-monitoring-alloy-receiver.povsim.svc.cluster.local:4317` |
 | OTLP HTTP | `http://grafana-k8s-monitoring-alloy-receiver.povsim.svc.cluster.local:4318` |
 | Zipkin | `http://grafana-k8s-monitoring-alloy-receiver.povsim.svc.cluster.local:9411` |
+
+## Step 2 — Build the app images
+
+From the project root:
+```
+docker build -t pov-sim-airlines:latest ./airlines
+docker build -t pov-sim-flights:latest ./flights
+docker build \
+  --build-arg REACT_APP_AIRLINES_API_URL=http://airlines.povsim.svc.cluster.local:8080/airlines \
+  --build-arg REACT_APP_FLIGHTS_API_URL=http://flights.povsim.svc.cluster.local:5001/flights \
+  -t pov-sim-frontend:latest ./frontend
+```
+
+OrbStack shares its Docker daemon with the in-cluster kubelet, so the
+images are immediately available to k8s with `imagePullPolicy: Never`
+(set in `values.yaml`).
+
+## Step 3 — Deploy pov-sim
+
+```
+helm upgrade --install pov-sim ./helm-charts/pov-sim --namespace povsim
+```
+
+- *The `airlines` service runs on http://airlines.povsim.svc.cluster.local:8080/ with Swagger doc UI at http://airlines.povsim.svc.cluster.local:8080/swagger-ui/index.html#/*
+- *The `flights` service runs on http://flights.povsim.svc.cluster.local:5001/ with Swagger doc UI at http://flights.povsim.svc.cluster.local:5001/apidocs/*
+- *The `frontend` service runs on http://frontend.povsim.svc.cluster.local:3000/*
+
+Confirm all pods are running:
+```
+kubectl get pods -n povsim
+```
+
+If a pod shows `CreateContainerConfigError` referencing
+`grafana-cloud-profiles-grafana-k8s-monitoring`, you skipped Step 1 —
+go back, install k8s-monitoring, then either wait for the kubelet to
+retry or force a restart:
+```
+kubectl rollout restart deploy/airlines deploy/flights -n povsim
+```
+
+Tear down with:
+```
+helm uninstall pov-sim -n povsim
+```
+
+## Step 4 — (OrbStack only) Deploy standalone cAdvisor
+
+OrbStack's kubelet does **not** expose `container_*` metrics, so on
+OrbStack we run a standalone cAdvisor DaemonSet and let Alloy's
+annotation autodiscovery pick it up. On a normal cluster, skip this.
+
+```
+kubectl apply -f cadvisor/cadvisor-daemonset.yaml
+kubectl get pods -n povsim -l app.kubernetes.io/name=cadvisor
+```
+
+## Step 5 — Verify the website is running
+
+Before driving load or opening Grafana, make sure the three services
+actually respond. OrbStack publishes every in-cluster Service at
+`<svc>.<ns>.svc.cluster.local` so you can hit them directly from your
+laptop's browser — no port-forward needed.
+
+**Quick check from the terminal:**
+```
+curl -sS -o /dev/null -w "frontend: %{http_code}\n" http://frontend.povsim.svc.cluster.local:3000/
+curl -sS -o /dev/null -w "airlines: %{http_code}\n" http://airlines.povsim.svc.cluster.local:8080/airlines
+curl -sS -o /dev/null -w "flights:  %{http_code}\n" http://flights.povsim.svc.cluster.local:5001/flights
+```
+
+All three should return `200`. If any returns connection-refused, the
+corresponding pod isn't ready yet — `kubectl get pods -n povsim` and
+wait for `1/1 Running`.
+
+**Open in a browser:**
+
+| Service | URL |
+| --- | --- |
+| Frontend (React UI) | http://frontend.povsim.svc.cluster.local:3000/ |
+| Airlines Swagger    | http://airlines.povsim.svc.cluster.local:8080/swagger-ui/index.html |
+| Flights  Swagger    | http://flights.povsim.svc.cluster.local:5001/apidocs/ |
+
+Click around the frontend and you should see flight/airline data
+populating — that confirms frontend → airlines → flights is wired up
+end-to-end.
+
+**If browser access doesn't work** (rare on OrbStack, common on other
+local clusters), fall back to `kubectl port-forward`:
+```
+kubectl port-forward -n povsim svc/frontend 3000:3000
+# then open http://localhost:3000/ in another tab
+```
+
+**Common failure modes:**
+
+| Symptom | Likely cause |
+| --- | --- |
+| `Connection refused` on the frontend | Pod is still `ContainerCreating` — wait, then retry. |
+| `CreateContainerConfigError` referencing `grafana-cloud-profiles-grafana-k8s-monitoring` | You skipped [Step 1](#step-1--install-grafana-k8s-monitoring-alloy). Install k8s-monitoring, then `kubectl rollout restart deploy/airlines deploy/flights -n povsim`. |
+| Frontend loads but shows no data / CORS errors in browser console | The airlines `AirlinesController` CORS allowlist is hardcoded to `*.povsim.svc.cluster.local`. If you're hitting a different hostname (e.g. via ingress or port-forward to `localhost`), it'll block — use the cluster-DNS URLs above. |
+| Pod stuck `ImagePullBackOff` on `pov-sim-*:latest` | You skipped [Step 2](#step-2--build-the-app-images), or built images outside OrbStack's Docker daemon. Re-run the `docker build` commands from a shell where `docker context show` returns `orbstack`. |
 
 # Simulate traffic to the services
 
@@ -188,3 +288,160 @@ wait
 
 Tweak the rate by changing `-e` (e.g. `-e 0.10` for 10%, `-e 0.50` for 50%).
 Tweak the duration by changing `-d` (seconds). Press `Ctrl+C` to stop both early.
+
+---
+
+# Appendix — Full Uninstall / Clean Slate
+
+Use this when you want to tear everything down and start fresh — for
+example before a clean re-deploy, when switching credentials, or when
+the cluster is in a weird state.
+
+The order matters in reverse of install: **apps first, telemetry
+second, namespace last**. Uninstalling the telemetry stack before the
+apps will leave the app pods stuck in `CreateContainerConfigError`
+referencing the missing Pyroscope secret.
+
+## A1 — Uninstall the apps (pov-sim)
+
+```bash
+helm uninstall pov-sim -n povsim
+```
+
+> **If you originally installed pov-sim without `--namespace povsim`**,
+> the release record lives in `default`. Check with `helm list -A`. If
+> you see `pov-sim` under namespace `default`, uninstall it there
+> instead:
+> ```bash
+> helm uninstall pov-sim -n default
+> ```
+
+## A2 — Remove standalone cAdvisor (OrbStack only)
+
+If you ran Step 4 of the install:
+```bash
+kubectl delete -f cadvisor/cadvisor-daemonset.yaml
+```
+
+## A3 — Uninstall Grafana k8s Monitoring (Alloy)
+
+```bash
+helm uninstall grafana-k8s-monitoring -n povsim
+```
+
+This also deletes the Pyroscope auth secret
+(`grafana-cloud-profiles-grafana-k8s-monitoring`). That's why A1 has to
+go first.
+
+## A4 — Delete the namespace
+
+```bash
+kubectl delete namespace povsim
+```
+
+## A5 — Clean up cluster-scoped orphans
+
+Some resources from the `ingress-nginx` subchart are **cluster-scoped**
+and survive a namespace deletion. Helm normally cleans them up via A1,
+but if you force-terminated the namespace (see A6) or interrupted an
+install mid-flight, they may be left behind and will block the next
+install with:
+
+> `ClusterRole "pov-sim-ingress-nginx" exists and cannot be imported into the current release`
+
+Check for and delete them:
+```bash
+kubectl get clusterrole,clusterrolebinding,ingressclass,validatingwebhookconfiguration 2>/dev/null \
+  | grep -iE 'pov-sim|ingress-nginx'
+
+# Then delete each one that showed up, e.g.:
+kubectl delete clusterrole               pov-sim-ingress-nginx
+kubectl delete clusterrolebinding        pov-sim-ingress-nginx
+kubectl delete ingressclass              nginx
+kubectl delete validatingwebhookconfiguration pov-sim-ingress-nginx-admission
+```
+
+## A6 — Force-terminate a stuck namespace
+
+If `kubectl get ns povsim` shows `Terminating` for more than a minute
+or two, the Alloy operator's finalizers are holding it open. Diagnose:
+```bash
+kubectl get ns povsim -o jsonpath='{.status.conditions}'
+```
+
+Typical culprits:
+- `helm.sdk.operatorframework.io/uninstall-release` on 5 Alloy CRs
+- `k8s.grafana.com/finalizer` on the alloy-operator Deployment
+
+Strip the finalizers off so cleanup can finish:
+```bash
+# Drop finalizers from the 5 stuck Alloy CRs
+kubectl get alloys.collectors.grafana.com -n povsim -o name | \
+  xargs -I {} kubectl patch {} -n povsim --type=merge -p '{"metadata":{"finalizers":[]}}'
+
+# Drop the finalizer from the stuck operator Deployment
+kubectl patch deploy/grafana-k8s-monitoring-alloy-operator -n povsim \
+  --type=merge -p '{"metadata":{"finalizers":[]}}'
+```
+
+Within a few seconds:
+```bash
+kubectl get ns povsim
+# Error from server (NotFound): namespaces "povsim" not found
+```
+
+**What you give up by force-terminating:** the finalizers exist so the
+k8s-monitoring operator can deregister the Alloy collectors from
+Grafana Cloud Fleet Management cleanly. After a force-terminate they'll
+show as offline in FM — cosmetic, not dangerous, but worth knowing.
+
+## A7 — Verify everything is gone
+
+```bash
+kubectl get ns povsim                                        # NotFound
+helm list -A | grep -E 'pov-sim|grafana-k8s-monitoring'      # (empty)
+kubectl get clusterrole,clusterrolebinding,ingressclass,validatingwebhookconfiguration \
+  2>/dev/null | grep -iE 'pov-sim|ingress-nginx'             # (empty)
+```
+
+When all three return nothing, the cluster is clean and you can
+re-run [Step 1 — Install Grafana k8s Monitoring (Alloy)](#step-1--install-grafana-k8s-monitoring-alloy)
+for a fresh deploy.
+
+## A8 — One-shot uninstall script (advanced)
+
+For convenience, here's the whole sequence as a copy-pasteable block.
+Run it from the repo root:
+
+```bash
+# A1 — uninstall apps (try both namespaces, ignore "not found")
+helm uninstall pov-sim -n povsim  2>/dev/null || true
+helm uninstall pov-sim -n default 2>/dev/null || true
+
+# A2 — standalone cAdvisor
+kubectl delete -f cadvisor/cadvisor-daemonset.yaml --ignore-not-found
+
+# A3 — telemetry
+helm uninstall grafana-k8s-monitoring -n povsim 2>/dev/null || true
+
+# A4 — namespace (may take a moment)
+kubectl delete namespace povsim --ignore-not-found --wait=false
+
+# A5 — cluster-scoped orphans (safe to retry; --ignore-not-found makes them no-ops if absent)
+kubectl delete clusterrole               pov-sim-ingress-nginx                --ignore-not-found
+kubectl delete clusterrolebinding        pov-sim-ingress-nginx                --ignore-not-found
+kubectl delete ingressclass              nginx                                --ignore-not-found
+kubectl delete validatingwebhookconfiguration pov-sim-ingress-nginx-admission --ignore-not-found
+
+# A6 — if the namespace is still Terminating after ~30s, force-finalize
+if kubectl get ns povsim 2>/dev/null | grep -q Terminating; then
+  kubectl get alloys.collectors.grafana.com -n povsim -o name 2>/dev/null | \
+    xargs -I {} kubectl patch {} -n povsim --type=merge -p '{"metadata":{"finalizers":[]}}'
+  kubectl patch deploy/grafana-k8s-monitoring-alloy-operator -n povsim \
+    --type=merge -p '{"metadata":{"finalizers":[]}}' 2>/dev/null || true
+fi
+
+# A7 — verify
+kubectl get ns povsim
+helm list -A | grep -E 'pov-sim|grafana-k8s-monitoring' || echo "(no helm releases — clean)"
+```
