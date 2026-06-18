@@ -1,23 +1,20 @@
 cluster:
   name: orbstack
 destinations:
-  # Single OTLP gateway destination for metrics, logs, and traces.
-  # Profiles cannot go through OTLP (Pyroscope ingest is a separate
-  # protocol), so they have their own destination below.
-  grafana-cloud-otlp:
-    type: otlp
-    url: https://otlp-gateway-us-central2.grafana.net/otlp
-    protocol: http
+  grafana-cloud-metrics:
+    type: prometheus
+    url: https://prometheus-us-central2.grafana.net/api/prom/push
     auth:
       type: basic
-      username: "${GRAFANA_STACK_ID}"
+      username: "${GRAFANA_METRICS_USERNAME}"
       password: "${GRAFANA_CLOUD_TOKEN}"
-    metrics:
-      enabled: true
-    logs:
-      enabled: true
-    traces:
-      enabled: true
+  grafana-cloud-logs:
+    type: loki
+    url: https://logs-prod-037.grafana.net/loki/api/v1/push
+    auth:
+      type: basic
+      username: "${GRAFANA_LOGS_USERNAME}"
+      password: "${GRAFANA_CLOUD_TOKEN}"
   grafana-cloud-profiles:
     type: pyroscope
     url: https://profiles-prod-026.grafana.net:443
@@ -25,6 +22,26 @@ destinations:
       type: basic
       username: "${GRAFANA_STACK_ID}"
       password: "${GRAFANA_CLOUD_TOKEN}"
+  # Traces push to a dedicated Tempo endpoint via OTLP gRPC. The chart's
+  # validations.yaml requires protocol=grpc for any Grafana Cloud Tempo
+  # destination — HTTP is rejected at install time. The traces-write
+  # username (1558281) is different from the metrics/logs/stack IDs,
+  # but the same GRAFANA_CLOUD_TOKEN works as the password
+  # (integration-scoped token includes traces:write).
+  grafana-cloud-traces:
+    type: otlp
+    url: https://tempo-prod-29-prod-us-central-7.grafana.net:443
+    protocol: grpc
+    auth:
+      type: basic
+      username: "${GRAFANA_TRACES_USERNAME}"
+      password: "${GRAFANA_CLOUD_TOKEN}"
+    traces:
+      enabled: true
+    metrics:
+      enabled: false
+    logs:
+      enabled: false
 clusterMetrics:
   enabled: true
   collector: alloy-metrics
@@ -50,8 +67,13 @@ hostMetrics:
   collector: alloy-metrics
   linuxHosts:
     enabled: true
+  windowsHosts:
+    enabled: true
   energyMetrics:
     enabled: true
+costMetrics:
+  enabled: true
+  collector: alloy-metrics
 annotationAutodiscovery:
   enabled: true
   collector: alloy-metrics
@@ -64,7 +86,7 @@ clusterEvents:
 nodeLogs:
   enabled: true
   collector: alloy-logs
-podLogs:
+podLogsViaLoki:
   enabled: true
   collector: alloy-logs
 applicationObservability:
@@ -119,22 +141,22 @@ collectorCommon:
         type: basic
         username: "${GRAFANA_STACK_ID}"
         password: "${GRAFANA_CLOUD_TOKEN}"
-# opencost is disabled in the OTLP-only variant because OpenCost reads
-# from a Prometheus-compatible endpoint, and the OTLP gateway is
-# write-only. To get cost metrics, use povsim-k8s-monitoring-values-nonotlp.yaml.
-#
-# windows-exporter is dropped because OrbStack only runs Linux nodes.
-#
-# podLogsViaLoki (Loki-native push path) is replaced by podLogs (the
-# generic feature) so that pod logs route to the OTLP destination
-# instead of trying to find a Loki destination that no longer exists.
-#
-# costMetrics is omitted for the same reason as opencost: it relies on
-# Prometheus reads that the OTLP gateway doesn't support.
 telemetryServices:
   kube-state-metrics:
     deploy: true
   node-exporter:
     deploy: true
+  windows-exporter:
+    deploy: true
+  opencost:
+    deploy: true
+    metricsSource: grafana-cloud-metrics
+    opencost:
+      exporter:
+        defaultClusterId: orbstack
+      prometheus:
+        existingSecretName: grafana-cloud-metrics-grafana-k8s-monitoring
+        external:
+          url: https://prometheus-us-central2.grafana.net/api/prom
   kepler:
     deploy: true

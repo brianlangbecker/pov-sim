@@ -65,6 +65,16 @@ it, and Helm will refuse to adopt a namespace it didn't create.
 
 This repo includes a pre-configured values file for the [Grafana k8s Monitoring](https://grafana.com/docs/grafana-cloud/monitor-infrastructure/kubernetes-monitoring/) Helm chart that ships telemetry (metrics, logs, traces, profiles) to Grafana Cloud.
 
+Two variants are available — pick one:
+
+| File | What it does | When to use |
+| --- | --- | --- |
+| `alloy/povsim-k8s-monitoring-values.yaml` (default) | All signals via the single OTLP gateway (`otlp-gateway-us-central2.grafana.net/otlp`), profiles direct to Pyroscope. opencost + windows-exporter disabled. | You want the simplest setup, a single OTLP-write token, and don't need cost metrics. |
+| `alloy/povsim-k8s-monitoring-values-nonotlp.yaml` | Separate Prometheus and Loki destinations + OTLP for traces + Pyroscope for profiles. Includes opencost (needs Prometheus reads) and the Windows exporter. | You want cost metrics, a Windows node, or you're matching a pre-existing non-OTLP setup. |
+
+The install commands below show the default (OTLP) file. To use the
+non-OTLP backup, swap the filename in the `envsubst <` line.
+
 Install `gettext` if you don't have it (provides `envsubst`):
 ```
 brew install gettext
@@ -173,7 +183,7 @@ laptop's browser — no port-forward needed.
 ```
 curl -sS -o /dev/null -w "frontend: %{http_code}\n" http://frontend.povsim.svc.cluster.local:3000/
 curl -sS -o /dev/null -w "airlines: %{http_code}\n" http://airlines.povsim.svc.cluster.local:8080/airlines
-curl -sS -o /dev/null -w "flights:  %{http_code}\n" http://flights.povsim.svc.cluster.local:5001/flights
+curl -sS -o /dev/null -w "flights:  %{http_code}\n" http://flights.povsim.svc.cluster.local:5001/
 ```
 
 All three should return `200`. If any returns connection-refused, the
