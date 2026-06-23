@@ -1,4 +1,5 @@
-import { Routes, Route } from 'react-router-dom';
+import { Route } from 'react-router-dom';
+import { FaroRoutes } from '@grafana/faro-react';
 import './App.css';
 import Home from './pages/Home';
 import Airlines from './pages/Airlines';
@@ -10,11 +11,11 @@ function App() {
     <div className="App">
       <header className="App-header">
         <Navigation />
-        <Routes>
+        <FaroRoutes>
           <Route path="/" element={<Home />} />
           <Route path="/flights" element={<Flights />} />
           <Route path="/airlines" element={<Airlines />} />
-        </Routes>
+        </FaroRoutes>
       </header>
     </div>
   );

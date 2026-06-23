@@ -3,6 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "dependencies": {
+    "@grafana/faro-react": "^1.19.0",
+    "@grafana/faro-web-tracing": "^1.19.0",
     "axios": "^1.7.9",
     "cra-template": "1.2.0",
     "react": "^18.3.1",

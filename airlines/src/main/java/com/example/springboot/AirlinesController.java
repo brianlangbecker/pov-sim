@@ -25,7 +25,7 @@ public class AirlinesController {
 	@GetMapping("/airlines")
 	@Operation(summary = "Get airlines", description = "Fetch a list of airlines")
 	public String getUserById(
-			@Parameter(description = "Optional flag - set raise to true to raise an exception") 
+			@Parameter(description = "Optional flag - set raise to true to raise an exception")
 			@RequestParam(value = "raise", required = false, defaultValue = "false") boolean raise) {
 		if (raise) {
 			throw new RuntimeException("Exception raised");

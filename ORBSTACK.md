@@ -13,6 +13,7 @@ Welcome to the PoV Flight Simulator (OrbStack + Helm edition)
 - [Simulate traffic to the services](#simulate-traffic-to-the-services)
   - [airlines-loadgen](#running-airlines-loadgen)
   - [flights-loadgen](#running-flights-loadgen)
+  - [frontend-loadgen](#running-frontend-loadgen)
 - [Appendix — Full Uninstall / Clean Slate](#appendix--full-uninstall--clean-slate)
   - [A1 — Uninstall the apps (pov-sim)](#a1--uninstall-the-apps-pov-sim)
   - [A2 — Remove standalone cAdvisor](#a2--remove-standalone-cadvisor-orbstack-only)
@@ -129,6 +130,12 @@ docker build \
   -t pov-sim-frontend:latest ./frontend
 ```
 
+> **Faro RUM:** the frontend ships browser telemetry (errors, web vitals,
+> sessions, route changes, traces) to Grafana Cloud Frontend
+> Observability via the Faro Web SDK initialized in
+> `frontend/src/faro.js`. To verify, open the app and check
+> DevTools → Network for POST requests to `faro-collector-…grafana.net`.
+
 OrbStack shares its Docker daemon with the in-cluster kubelet, so the
 images are immediately available to k8s with `imagePullPolicy: Never`
 (set in `values.yaml`).
@@ -224,6 +231,9 @@ The `scripts/` directory includes load generator scripts you can use to make bat
 
 - The `airlines-loadgen.sh` script generates load to the `airlines` service
 - The `flights-loadgen.sh` script generates load to the `flights` service
+- The `frontend-loadgen.sh` script drives a headless browser against the
+  `frontend` service so Faro RUM events fire and frontend → airlines →
+  flights traces are produced end-to-end
 
 ## Running airlines-loadgen
 
@@ -285,19 +295,73 @@ From the `scripts/` directory:
   ./flights-loadgen.sh -t orbstack -e 0.25 -d 120
   ```
 
-## Running both loadgens together (10 minutes, 25% error rate)
+## Running frontend-loadgen
 
-From the `scripts/` directory, run both loadgens in parallel for 10 minutes
-(600 seconds) at a 25% error rate against the OrbStack deployment:
+*Note: You may need to run the following command to add the proper permissions to execute the script*
+```
+chmod +x frontend-loadgen.sh
+```
+
+The `frontend-loadgen` script uses [k6](https://k6.io/docs/) with the
+`k6/browser` module to drive a real headless Chromium against the
+`frontend` service. This is the **only** loadgen that exercises the
+React bundle in a real browser — which means it's the only one that
+produces Faro RUM events (errors, web vitals, route changes, sessions)
+and stitched frontend → airlines → flights traces in Tempo.
+
+**Prerequisite:** install k6 v0.46+ (the browser module ships built-in).
+
+```
+brew install k6
+```
+
+You can optionally specify the following parameters to the script:
+- A target `-t` to set the environment: `local` or `orbstack` (default = `local`)
+- A VUs count `-v` for the number of parallel browsers (default = `2`)
+- A duration `-d` in seconds (default = `60`)
+
+From the `scripts/` directory:
+
+- Run the script targeting OrbStack
+  ```
+  ./frontend-loadgen.sh -t orbstack
+  ```
+
+- View usage
+  ```
+  ./frontend-loadgen.sh -h
+  ```
+
+- Example: 4 parallel browsers for 5 minutes (300 sec) against OrbStack
+  ```
+  ./frontend-loadgen.sh -t orbstack -v 4 -d 300
+  ```
+
+The `local` target points at `http://localhost:3000` (use this when
+you're running `kubectl port-forward svc/frontend 3000:3000` or
+`npm start` from `./frontend`). The `orbstack` target points at
+`http://frontend.povsim.svc.cluster.local:3000` and relies on OrbStack
+exposing cluster DNS to the host.
+
+## Running all three loadgens together (10 minutes)
+
+From the `scripts/` directory, run all three loadgens in parallel for 10
+minutes (600 seconds) against the OrbStack deployment. Backend
+loadgens drive Tempo trace volume at a 25% error rate; the browser
+loadgen runs 2 parallel headless browsers to produce Faro RUM events
+and the frontend-rooted traces:
 
 ```
 ./airlines-loadgen.sh -t orbstack -e 0.25 -d 600 & \
 ./flights-loadgen.sh  -t orbstack -e 0.25 -d 600 & \
+./frontend-loadgen.sh -t orbstack -v 2 -d 600    & \
 wait
 ```
 
-Tweak the rate by changing `-e` (e.g. `-e 0.10` for 10%, `-e 0.50` for 50%).
-Tweak the duration by changing `-d` (seconds). Press `Ctrl+C` to stop both early.
+Tweak the backend rate by changing `-e` (e.g. `-e 0.10` for 10%,
+`-e 0.50` for 50%). Tweak the browser concurrency by changing `-v`
+(higher = more parallel sessions in Faro). Tweak the duration by
+changing `-d` (seconds). Press `Ctrl+C` to stop all three early.
 
 ---
 
