@@ -22,11 +22,14 @@ COPY --from=build /app/build/libs/*.jar app.jar
 
 # OpenTelemetry configuration
 ENV OTEL_SERVICE_NAME="airlines"
-ENV OTEL_RESOURCE_ATTRIBUTES="service.namespace=povsim"
+ENV OTEL_RESOURCE_ATTRIBUTES="service.namespace=povsim,env=production"
 ENV OTEL_EXPORTER_OTLP_ENDPOINT="http://grafana-k8s-monitoring-alloy-receiver.povsim.svc.cluster.local:4317"
 ENV OTEL_EXPORTER_OTLP_PROTOCOL="grpc"
 ENV OTEL_METRICS_EXPORTER="otlp"
-ENV OTEL_LOGS_EXPORTER="otlp"
+# Logs are emitted as structured JSON to stdout (see logback-spring.xml)
+# and captured by Alloy's filelog receiver. Disabling the OTel agent's
+# OTLP log exporter prevents every log line from being shipped twice.
+ENV OTEL_LOGS_EXPORTER="none"
 ENV OTEL_TRACES_EXPORTER="otlp"
 
 EXPOSE 8080

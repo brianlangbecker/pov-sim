@@ -19,6 +19,9 @@ dependencies {
 	// end::actuator[]
 	implementation 'org.springframework.boot:spring-boot-starter-web'
 	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.5.0'
+	// Structured JSON stdout logging with trace_id/span_id from OTel MDC.
+	// The OTel Java agent auto-populates MDC when OTEL_INSTRUMENTATION_LOGBACK_MDC_ENABLED=true (default in agent v2+).
+	implementation 'net.logstash.logback:logstash-logback-encoder:7.4'
 	// tag::tests[]
 	testImplementation('org.springframework.boot:spring-boot-starter-test')
 	// end::tests[]

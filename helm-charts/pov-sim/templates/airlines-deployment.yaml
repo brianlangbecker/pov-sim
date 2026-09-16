@@ -27,6 +27,8 @@ spec:
               value: airlines
             - name: PYROSCOPE_SERVER_ADDRESS
               value: https://profiles-prod-026.grafana.net:443
+            - name: PYROSCOPE_LABELS
+              value: env=production
             - name: PYROSCOPE_BASIC_AUTH_USER
               valueFrom:
                 secretKeyRef:

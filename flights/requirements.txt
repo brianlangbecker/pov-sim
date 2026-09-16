@@ -2,3 +2,8 @@ Flask==3.0.3
 flasgger==0.9.7.1
 Flask-Cors==5.0.0
 pyroscope-io==1.0.11
+# Structured JSON stdout logging. The OTel Python logging auto-instrumentation
+# (OTEL_PYTHON_LOGGING_AUTO_INSTRUMENTATION_ENABLED=true) injects otelTraceID
+# and otelSpanID onto every LogRecord; the formatter below promotes them to
+# trace_id / span_id JSON fields.
+python-json-logger==2.0.7

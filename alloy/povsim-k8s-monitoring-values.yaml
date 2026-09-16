@@ -18,6 +18,39 @@ destinations:
       enabled: true
     traces:
       enabled: true
+    # Fallback resource attribute: stamp env=production only on telemetry
+    # that didn't already declare it. Apps (airlines, flights) set env at
+    # their source via OTEL_RESOURCE_ATTRIBUTES; this catches everything
+    # else — cluster-scoped signals produced by Alloy itself (kubelet /
+    # cAdvisor / kube-state-metrics scrapes, pod stdout logs via filelog,
+    # node journal logs, cluster events) which have no upstream env var.
+    #
+    # `where attributes["env"] == nil` makes this an insert, not an
+    # overwrite, so app-declared values (e.g. env=staging in a future dev
+    # cluster) always win.
+    processors:
+      transform:
+        metrics:
+          resource:
+            - 'set(attributes["env"], "production") where attributes["env"] == nil'
+        logs:
+          resource:
+            - 'set(attributes["env"], "production") where attributes["env"] == nil'
+          # Pod logs arrive as OTel records whose body is the raw JSON line the
+          # apps write to stdout (airlines: logstash-logback-encoder; flights:
+          # python-json-logger). Parse that JSON and lift the logger field into
+          # a log-record attribute — Loki then stores it as structured metadata
+          # automatically. airlines emits "logger_name", flights emits "name".
+          # Guards: the `^\{` check skips non-JSON logs (nginx, alloy, etc.) so
+          # ParseJSON never runs on them, and the key-presence check avoids
+          # OTTL's "key not found in map" error when the field is absent
+          # (indexing a missing map key throws rather than returning nil).
+          log:
+            - 'set(attributes["logger_name"], ParseJSON(body)["logger_name"]) where IsMatch(body, "^\\{") and IsMatch(body, "\"logger_name\"\\s*:")'
+            - 'set(attributes["logger_name"], ParseJSON(body)["name"]) where attributes["logger_name"] == nil and IsMatch(body, "^\\{") and IsMatch(body, "\"name\"\\s*:")'
+        traces:
+          resource:
+            - 'set(attributes["env"], "production") where attributes["env"] == nil'
   grafana-cloud-profiles:
     type: pyroscope
     url: https://profiles-prod-026.grafana.net:443
@@ -25,6 +58,10 @@ destinations:
       type: basic
       username: "${GRAFANA_STACK_ID}"
       password: "${GRAFANA_CLOUD_TOKEN}"
+    # Pyroscope uses Loki-style labels, not OTel attributes, so tag
+    # profiles at the destination the same way we tag OTLP signals above.
+    extraLabels:
+      env: production
 clusterMetrics:
   enabled: true
   collector: alloy-metrics
@@ -64,7 +101,7 @@ clusterEvents:
 nodeLogs:
   enabled: true
   collector: alloy-logs
-podLogs:
+podLogsViaOpenTelemetry:
   enabled: true
   collector: alloy-logs
 applicationObservability:
@@ -81,11 +118,29 @@ applicationObservability:
     zipkin:
       enabled: true
       port: 9411
+# Beyla eBPF auto-instrumentation is enabled to demonstrate zero-code
+# observability for un-instrumented workloads. It's suppressed for the
+# three services in this repo (airlines, flights, frontend) because they
+# already have first-party OTel instrumentation (Java agent, Python distro,
+# Faro Web SDK) — Beyla-inferred RED metrics for those three were showing
+# up in App Observability as duplicate services (`flights` alongside
+# `povsim/flights`, etc.) because Beyla doesn't stamp service.namespace.
+#
+# `deliverTracesToApplicationObservability: false` keeps Beyla's traces
+# out of App O11y (agent-emitted traces are the source of truth).
+# `extraMetricProcessingRules` drops Beyla's RED metrics for these specific
+# services post-scrape, so the App O11y "Services" list stays clean.
 autoInstrumentation:
   enabled: true
   collector: alloy-metrics
   beyla:
     deliverTracesToApplicationObservability: false
+    extraMetricProcessingRules: |-
+      rule {
+        source_labels = ["service_name"]
+        regex = "airlines|flights|frontend"
+        action = "drop"
+      }
 profiling:
   enabled: true
   collector: alloy-profiles
@@ -103,6 +158,10 @@ collectors:
     presets:
       - filesystem-log-reader
       - daemonset
+    # podLogsViaOpenTelemetry is public-preview in k8s-monitoring v4.x; the
+    # collector refuses to load the OTel log-source components without this.
+    alloy:
+      stabilityLevel: public-preview
   alloy-receiver:
     presets:
       - deployment
@@ -125,9 +184,11 @@ collectorCommon:
 #
 # windows-exporter is dropped because OrbStack only runs Linux nodes.
 #
-# podLogsViaLoki (Loki-native push path) is replaced by podLogs (the
-# generic feature) so that pod logs route to the OTLP destination
-# instead of trying to find a Loki destination that no longer exists.
+# podLogsViaLoki (Loki-native push path) is replaced by
+# podLogsViaOpenTelemetry so that pod logs route to the OTLP destination
+# as OTel log records instead of trying to find a Loki destination that
+# no longer exists. That feature is public-preview in v4.x, which is
+# why alloy-logs sets alloy.stabilityLevel: public-preview above.
 #
 # costMetrics is omitted for the same reason as opencost: it relies on
 # Prometheus reads that the OTLP gateway doesn't support.

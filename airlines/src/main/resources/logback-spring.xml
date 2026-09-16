@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Production logging config for airlines: JSON to stdout with trace context.
+
+  - LogstashEncoder emits one JSON object per line: timestamp, level, message,
+    thread, logger, plus any MDC keys we opt-in to.
+  - The OTel Java agent auto-injects trace_id / span_id / trace_flags into
+    SLF4J MDC by default (OTEL_INSTRUMENTATION_LOGBACK_MDC_ENABLED=true).
+    We include only those three keys so log lines stay compact.
+  - service.name is stamped as a static custom field so filelog-captured
+    records carry it even though the OTel resource attribute mechanism
+    doesn't reach into stdout.
+
+  Alloy's filelog receiver captures this JSON as the log body. In Loki,
+  LogQL `| json` parses it, exposing trace_id/level/message as filterable
+  fields. See alloy/TELEMETRY-FLOW.md for the end-to-end path.
+-->
+<configuration>
+  <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+    <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+      <includeMdcKeyName>trace_id</includeMdcKeyName>
+      <includeMdcKeyName>span_id</includeMdcKeyName>
+      <includeMdcKeyName>trace_flags</includeMdcKeyName>
+      <customFields>{"service.name":"airlines","env":"production"}</customFields>
+    </encoder>
+  </appender>
+
+  <root level="INFO">
+    <appender-ref ref="STDOUT"/>
+  </root>
+</configuration>

@@ -15,11 +15,14 @@ RUN pip install --no-cache-dir "opentelemetry-distro[otlp]==$OPENTELEMETRY_DISTR
 COPY . .
 
 ENV OTEL_SERVICE_NAME="flights"
-ENV OTEL_RESOURCE_ATTRIBUTES="service.namespace=povsim"
+ENV OTEL_RESOURCE_ATTRIBUTES="service.namespace=povsim,env=production"
 ENV OTEL_EXPORTER_OTLP_ENDPOINT="http://grafana-k8s-monitoring-alloy-receiver.povsim.svc.cluster.local:4318"
 ENV OTEL_EXPORTER_OTLP_PROTOCOL="http/protobuf"
 ENV OTEL_PYTHON_LOGGING_AUTO_INSTRUMENTATION_ENABLED=true
-ENV OTEL_LOGS_EXPORTER=otlp
+# Logs are emitted as structured JSON to stdout (see app.py's _JsonFormatter)
+# and captured by Alloy's filelog receiver. Disabling the OTel SDK's OTLP log
+# exporter prevents every log line from being shipped twice.
+ENV OTEL_LOGS_EXPORTER=none
 ENV OTEL_METRICS_EXPORTER=otlp
 ENV OTEL_TRACES_EXPORTER=otlp
 

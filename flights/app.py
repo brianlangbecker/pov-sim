@@ -1,10 +1,44 @@
+import logging
 import os
 
 import pyroscope
 from flasgger import Swagger
 from flask import Flask, jsonify, request
 from flask_cors import CORS
+from pythonjsonlogger import jsonlogger
 from utils import get_random_int
+
+
+class _JsonFormatter(jsonlogger.JsonFormatter):
+    """Emit one JSON object per log line, promoting OTel-injected trace context
+    fields to `trace_id`/`span_id` so Loki + Tempo can correlate on them.
+
+    LoggingInstrumentor (enabled via OTEL_PYTHON_LOGGING_AUTO_INSTRUMENTATION_ENABLED=true
+    in the Dockerfile) attaches `otelTraceID`, `otelSpanID`, and `otelTraceSampled`
+    to every LogRecord. We rename them here so the field names match what
+    Grafana Cloud's Tempo→Loki drilldown expects.
+    """
+
+    def add_fields(self, log_record, record, message_dict):
+        super().add_fields(log_record, record, message_dict)
+        otel_trace_id = getattr(record, "otelTraceID", None)
+        otel_span_id = getattr(record, "otelSpanID", None)
+        if otel_trace_id and otel_trace_id != "0":
+            log_record["trace_id"] = otel_trace_id
+        if otel_span_id and otel_span_id != "0":
+            log_record["span_id"] = otel_span_id
+        log_record.setdefault("level", record.levelname)
+        log_record.setdefault("service.name", "flights")
+        log_record.setdefault("env", "production")
+
+
+_json_handler = logging.StreamHandler()
+_json_handler.setFormatter(_JsonFormatter("%(asctime)s %(levelname)s %(name)s %(message)s"))
+_root = logging.getLogger()
+_root.setLevel(logging.INFO)
+# Replace any handlers Flask / opentelemetry-instrument installed so every
+# log line hits stdout as JSON exactly once.
+_root.handlers = [_json_handler]
 
 pyroscope.configure(
     application_name=os.environ.get("PYROSCOPE_APPLICATION_NAME", "flights"),
