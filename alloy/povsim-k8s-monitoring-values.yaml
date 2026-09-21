@@ -36,15 +36,7 @@ destinations:
         logs:
           resource:
             - 'set(attributes["env"], "production") where attributes["env"] == nil'
-          # Pod logs arrive as OTel records whose body is the raw JSON line the
-          # apps write to stdout (airlines: logstash-logback-encoder; flights:
-          # python-json-logger). Parse that JSON and lift the logger field into
-          # a log-record attribute — Loki then stores it as structured metadata
-          # automatically. airlines emits "logger_name", flights emits "name".
-          # Guards: the `^\{` check skips non-JSON logs (nginx, alloy, etc.) so
-          # ParseJSON never runs on them, and the key-presence check avoids
-          # OTTL's "key not found in map" error when the field is absent
-          # (indexing a missing map key throws rather than returning nil).
+            - 'set(attributes["deployment.environment.name"], "production") where attributes["deployment.environment.name"] == nil'
           log:
             - 'set(attributes["logger_name"], ParseJSON(body)["logger_name"]) where IsMatch(body, "^\\{") and IsMatch(body, "\"logger_name\"\\s*:")'
             - 'set(attributes["logger_name"], ParseJSON(body)["name"]) where attributes["logger_name"] == nil and IsMatch(body, "^\\{") and IsMatch(body, "\"name\"\\s*:")'
