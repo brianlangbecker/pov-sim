@@ -13,6 +13,21 @@ flights:
     pullPolicy: Never
   port: 5001
   replicas: 1
+  # flights/app.py has a deliberately staged unbounded-cache leak
+  # (_booking_history, 40KB/booking via POST /flight, 300KB/search via
+  # GET /flights/<airline>, never trimmed). Idle baseline is ~55-65MiB.
+  # Back down to 128Mi (from 256Mi) for a faster, easier-to-watch crash --
+  # live-tested previously at 38s-3m42s run-to-run. Use
+  # scripts/flights-loadgen-parallel.sh to trigger -- it polls and stops
+  # itself on the actual crash instead of needing a duration guessed in
+  # advance.
+  resources:
+    requests:
+      memory: "64Mi"
+      cpu: "50m"
+    limits:
+      memory: "128Mi"
+      cpu: "500m"
 
 frontend:
   image:

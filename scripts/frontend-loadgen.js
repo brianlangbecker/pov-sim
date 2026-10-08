@@ -9,14 +9,17 @@
 //
 // Configured via env vars (set by `frontend-loadgen.sh` or directly):
 //   TARGET   = local | orbstack    (default: local)
-//   DURATION = e.g. 60s, 5m        (default: 60s)
+//   DURATION = e.g. 60s, 5m        (default: 600s)
 //   VUS      = number of parallel browsers (default: 2)
 
 import { browser } from 'k6/browser';
 import { sleep } from 'k6';
 
-const TARGET = __ENV.TARGET || 'local';
-const DURATION = __ENV.DURATION || '60s';
+// orbstack is the fallback here (not local) because
+// http://frontend.povsim.svc.cluster.local:3000 is the only origin
+// currently registered in the Faro app's CORS allow-list in Grafana Cloud.
+const TARGET = __ENV.TARGET || 'orbstack';
+const DURATION = __ENV.DURATION || '600s';
 const VUS = parseInt(__ENV.VUS || '2', 10);
 
 const BASE_URLS = {
@@ -62,13 +65,19 @@ export default async function () {
     // fire their axios calls when the "Get …" button is clicked, so
     // click that too on each visit — that produces the cross-origin
     // XHR span and the stitched frontend → backend trace.
+    //
+    // Airlines has exactly one button.app-btn, but Flights renders one per
+    // airline (AA/DL/UA) -- .first() avoids a Playwright strict-mode
+    // violation ("multiple elements returned for selector query") that
+    // otherwise throws on every single iteration and silently prevents the
+    // GET /flights/<airline> call from ever firing.
     await page.locator('a[href="/airlines"]').click();
-    await page.locator('button.app-btn').click();
+    await page.locator('button.app-btn').first().click();
     await page.waitForLoadState('networkidle');
     sleep(1);
 
     await page.locator('a[href="/flights"]').click();
-    await page.locator('button.app-btn').click();
+    await page.locator('button.app-btn').first().click();
     await page.waitForLoadState('networkidle');
     sleep(1);
 

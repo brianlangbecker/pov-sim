@@ -28,7 +28,9 @@ spec:
             - name: PYROSCOPE_SERVER_ADDRESS
               value: https://profiles-prod-026.grafana.net:443
             - name: PYROSCOPE_LABELS
-              value: env=production
+              # namespace=povsim -- see flights-deployment.yaml's comment.
+              # Rollback: revert to `env=production`.
+              value: env=production,namespace=povsim
             - name: PYROSCOPE_BASIC_AUTH_USER
               valueFrom:
                 secretKeyRef:

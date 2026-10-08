@@ -2,8 +2,14 @@ Flask==3.0.3
 flasgger==0.9.7.1
 Flask-Cors==5.0.0
 pyroscope-io==1.0.11
+# Real HTTP call to airlines (see app.py's _fetch_operating_airlines) --
+# was already present transitively, but pinned explicitly since
+# opentelemetry-instrumentation-requests (auto-installed by
+# opentelemetry-bootstrap) only auto-instruments it if it's a direct,
+# guaranteed-present dependency.
+requests==2.32.3
 # Structured JSON stdout logging. The OTel Python logging auto-instrumentation
-# (OTEL_PYTHON_LOGGING_AUTO_INSTRUMENTATION_ENABLED=true) injects otelTraceID
-# and otelSpanID onto every LogRecord; the formatter below promotes them to
-# trace_id / span_id JSON fields.
+# (enabled via OTEL_PYTHON_LOG_CORRELATION=true, set in the Dockerfile) injects
+# otelTraceID and otelSpanID onto every LogRecord; app.py's formatter promotes
+# them to trace_id / span_id JSON fields.
 python-json-logger==2.0.7

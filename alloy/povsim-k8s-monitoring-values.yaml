@@ -40,6 +40,14 @@ destinations:
           log:
             - 'set(attributes["logger_name"], ParseJSON(body)["logger_name"]) where IsMatch(body, "^\\{") and IsMatch(body, "\"logger_name\"\\s*:")'
             - 'set(attributes["logger_name"], ParseJSON(body)["name"]) where attributes["logger_name"] == nil and IsMatch(body, "^\\{") and IsMatch(body, "\"name\"\\s*:")'
+            # Both apps emit trace_id/span_id as top-level JSON keys (airlines
+            # via logback-spring.xml's MDC includes; flights via app.py's
+            # _JsonFormatter). Without this, Loki never sees them as
+            # attributes/structured metadata, so Grafana's trace<->log
+            # correlation buttons return nothing even though the data exists
+            # in the raw body text.
+            - 'set(attributes["trace_id"], ParseJSON(body)["trace_id"]) where IsMatch(body, "^\\{") and IsMatch(body, "\"trace_id\"\\s*:")'
+            - 'set(attributes["span_id"], ParseJSON(body)["span_id"]) where IsMatch(body, "^\\{") and IsMatch(body, "\"span_id\"\\s*:")'
         traces:
           resource:
             - 'set(attributes["env"], "production") where attributes["env"] == nil'

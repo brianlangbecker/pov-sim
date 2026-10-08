@@ -29,15 +29,20 @@
 
 LINE_SEPARATOR="----------------------------------------------------------"
 
-DEFAULT_TARGET=local
-DEFAULT_DURATION=60
+# orbstack (http://frontend.povsim.svc.cluster.local:3000) is the default,
+# not local, because that's the only origin currently registered in the
+# Faro app's CORS allow-list in Grafana Cloud -- localhost:3000 would be
+# silently blocked by Faro's collector rather than actually erroring, so
+# defaulting to it here would look like it worked while sending nothing.
+DEFAULT_TARGET=orbstack
+DEFAULT_DURATION=600
 DEFAULT_VUS=2
 
 usage() {
     echo "Usage: $0 [-t target] [-v vus] [-d duration_secs]"
-    echo "  -t  Target environment: local (default) or orbstack"
+    echo "  -t  Target environment: orbstack (default) or local"
     echo "  -v  Number of parallel browsers / virtual users (default = ${DEFAULT_VUS})"
-    echo "  -d  Duration in seconds (default = ${DEFAULT_DURATION})"
+    echo "  -d  Duration in seconds (default = ${DEFAULT_DURATION}, i.e. 10 minutes)"
     echo "  -h  Show this help message"
     exit 1
 }

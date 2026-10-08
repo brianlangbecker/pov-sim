@@ -51,12 +51,18 @@ POST_FLIGHT_FLIGHT_NUMS=(
 )
 POST_FLIGHT_RAISE_QUERY_PARAM="&raise=500"
 
+DEFAULT_REQUEST_DELAY=0
+
 usage() {
-    echo "Usage: $0 [-t target] [-e error_rate] [-d duration_secs] [-b base_url]"
+    echo "Usage: $0 [-t target] [-e error_rate] [-d duration_secs] [-b base_url] [-r request_delay_secs]"
     echo "  -t  Target environment: local (default) or orbstack"
     echo "  -e  Rate of requests that should error, expressed as a decimal in the range [0.0, 1.0] (default = ${DEFAULT_ERROR_RATE})"
     echo "  -d  Duration of the test in seconds (default = ${DEFAULT_DURATION})"
     echo "  -b  Base URL of the service, overrides -t (default = ${DEFAULT_BASE_URL})"
+    echo "  -r  Delay in seconds after each individual request (default = ${DEFAULT_REQUEST_DELAY})."
+    echo "      Use this to get a consistent, throttled aggregate request rate instead of"
+    echo "      curl/network jitter causing wildly different throughput run to run --"
+    echo "      relevant when pacing a memory-leak demo toward a target crash time."
     echo "  -h  Show this help message"
     exit 1
 }
@@ -64,8 +70,9 @@ usage() {
 ERROR_RATE=$DEFAULT_ERROR_RATE
 DURATION=$DEFAULT_DURATION
 BASE_URL=$DEFAULT_BASE_URL
+REQUEST_DELAY=$DEFAULT_REQUEST_DELAY
 
-while getopts "t:e:d:b:h" opt; do
+while getopts "t:e:d:b:r:h" opt; do
     case $opt in
         t)
             case "$OPTARG" in
@@ -77,6 +84,7 @@ while getopts "t:e:d:b:h" opt; do
         e) ERROR_RATE="$OPTARG" ;;
         d) DURATION="$OPTARG" ;;
         b) BASE_URL="$OPTARG" ;;
+        r) REQUEST_DELAY="$OPTARG" ;;
         h) usage ;;
         *) usage ;;
     esac
@@ -108,6 +116,7 @@ run_loadgen() {
             ENDPOINT="$BASE_URL$i"
             echo "\nSending GET request: $ENDPOINT..."
             curl $ENDPOINT
+            sleep "$REQUEST_DELAY"
         done
 
         # Ping GET flights
@@ -121,6 +130,7 @@ run_loadgen() {
             ENDPOINT="$BASE_URL$path$QUERY_PARAMS"
             echo "\nSending GET request: $ENDPOINT"
             curl $ENDPOINT
+            sleep "$REQUEST_DELAY"
         done
 
         # Ping POST flight
@@ -135,6 +145,7 @@ run_loadgen() {
                 ENDPOINT="$BASE_URL$POST_FLIGHT_ENDPOINT$QUERY_PARAMS"
                 echo "\nSending POST request: $ENDPOINT"
                 curl -X POST $ENDPOINT
+                sleep "$REQUEST_DELAY"
             done
         done
 

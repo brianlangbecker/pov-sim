@@ -1,0 +1,177 @@
+// Feature: Profiling
+declare "profiling" {
+  argument "profiles_destinations" {
+    comment = "Must be a list of profile destinations where collected profiles should be forwarded to"
+  }
+  // Profiles: eBPF
+  discovery.kubernetes "ebpf_pods" {
+    role = "pod"
+    selectors {
+      role = "pod"
+      field = "spec.nodeName=" + sys.env("HOSTNAME")
+    }
+  } // discovery.kubernetes "ebpf_pods"
+
+  discovery.relabel "ebpf_pods" {
+    targets = discovery.kubernetes.ebpf_pods.targets
+    rule {
+      source_labels = ["__meta_kubernetes_pod_phase"]
+      regex = "Succeeded|Failed|Completed"
+      action = "drop"
+    }
+    rule {
+      source_labels = ["__meta_kubernetes_pod_annotation_profiles_grafana_com_cpu_ebpf_enabled"]
+      regex         = "true"
+      action        = "keep"
+    }
+    rule {
+      source_labels = ["__meta_kubernetes_namespace"]
+      target_label = "namespace"
+    }
+    rule {
+      source_labels = ["__meta_kubernetes_pod_name"]
+      target_label = "pod"
+    }
+    rule {
+      source_labels = ["__meta_kubernetes_pod_node_name"]
+      target_label = "node"
+    }
+    rule {
+      source_labels = ["__meta_kubernetes_pod_container_name"]
+      target_label = "container"
+    }
+
+    // Set service_name by choosing the first value found from the following ordered list:
+    // - pod.annotation[resource.opentelemetry.io/service.name]
+    // - pod.label[app.kubernetes.io/instance]
+    // - pod.label[app.kubernetes.io/name]
+    // - k8s.container.name
+    rule {
+      action = "replace"
+      source_labels = [
+        "__meta_kubernetes_pod_annotation_resource_opentelemetry_io_service_name",
+        "__meta_kubernetes_pod_label_app_kubernetes_io_instance",
+        "__meta_kubernetes_pod_label_app_kubernetes_io_name",
+        "container",
+      ]
+      separator = ";"
+      regex = "^(?:;*)?([^;]+).*$"
+      replacement = "$1"
+      target_label = "service_name"
+    }
+
+    // Set service_namespace by choosing the first value found from the following ordered list:
+    // - pod.annotation[resource.opentelemetry.io/service.namespace]
+    // - pod.namespace
+    rule {
+      action = "replace"
+      source_labels = [
+        "__meta_kubernetes_pod_annotation_resource_opentelemetry_io_service_namespace",
+        "namespace",
+      ]
+      separator = ";"
+      regex = "^(?:;*)?([^;]+).*$"
+      replacement = "$1"
+      target_label = "service_namespace"
+    }
+
+    // Set service_instance_id by choosing the first value found from the following ordered list:
+    // - pod.annotation[resource.opentelemetry.io/service.instance.id]
+    // - concat([k8s.namespace.name, k8s.pod.name, k8s.container.name], '.')
+    rule {
+      source_labels = ["__meta_kubernetes_pod_annotation_resource_opentelemetry_io_service_instance_id"]
+      target_label = "service_instance_id"
+    }
+    rule {
+      source_labels = ["service_instance_id", "namespace", "pod", "container"]
+      separator = "."
+      regex = "^\\.([^.]+\\.[^.]+\\.[^.]+)$"
+      target_label = "service_instance_id"
+    }
+
+    rule {
+      replacement = "alloy/pyroscope.ebpf"
+      target_label = "source"
+    }
+  } // discovery.relabel "ebpf_pods"
+
+  pyroscope.ebpf "ebpf_pods" {
+    targets = discovery.relabel.ebpf_pods.output
+    demangle = "none"
+    sample_rate = 19
+    dotnet_enabled = true
+    hotspot_enabled = true
+    perl_enabled = true
+    php_enabled = true
+    python_enabled = true
+    ruby_enabled = true
+    v8_enabled = true
+    forward_to = argument.profiles_destinations.value
+  } // pyroscope.ebpf "ebpf_pods"
+} // declare "profiling"
+profiling "feature" {
+  profiles_destinations = [
+    pyroscope.write.grafana_cloud_profiles.receiver,
+  ]
+}
+
+
+remote.kubernetes.secret "alloy_profiles_remote_cfg" {
+  name      = "alloy-profiles-remote-cfg-grafana-k8s-monitoring"
+  namespace = "povsim"
+} // remote.kubernetes.secret "alloy_profiles_remote_cfg"
+
+remotecfg {
+  id = string.format("grafana-k8s-monitoring-%s-%s-%s-%s", "orbstack", "povsim", "alloy-profiles", sys.env("K8S_NODE_NAME"))
+  url = "https://fleet-management-prod-002.grafana.net"
+  basic_auth {
+    username = convert.nonsensitive(remote.kubernetes.secret.alloy_profiles_remote_cfg.data["username"])
+    password = remote.kubernetes.secret.alloy_profiles_remote_cfg.data["password"]
+  }
+  tls_config {
+    insecure_skip_verify = false
+  }
+  poll_frequency = "5m"
+  attributes = {
+    "cluster" = "orbstack",
+    "namespace" = "povsim",
+    "platform" = "kubernetes",
+    "release" = "grafana-k8s-monitoring",
+    "source" = "k8s-monitoring",
+    "sourceVersion" = "4.1.6",
+    "workloadName" = "alloy-profiles",
+    "workloadType" = "daemonset",
+  }
+}
+
+
+// Destination: grafana-cloud-profiles (pyroscope)
+pyroscope.write "grafana_cloud_profiles" {
+  endpoint {
+    url = "https://profiles-prod-026.grafana.net:443"
+    headers = {
+    }
+    basic_auth {
+      username = convert.nonsensitive(remote.kubernetes.secret.grafana_cloud_profiles.data["username"])
+      password = remote.kubernetes.secret.grafana_cloud_profiles.data["password"]
+    }
+    tls_config {
+      insecure_skip_verify = false
+    }
+    min_backoff_period = "500ms"
+    max_backoff_period = "5m"
+    max_backoff_retries = "10"
+  }
+
+  external_labels = {
+    "cluster" = "orbstack",
+    "k8s_cluster_name" = "orbstack",
+    env = "production",
+  }
+} // pyroscope.write "grafana_cloud_profiles"
+
+remote.kubernetes.secret "grafana_cloud_profiles" {
+  name      = "grafana-cloud-profiles-grafana-k8s-monitoring"
+  namespace = "povsim"
+} // remote.kubernetes.secret "grafana_cloud_profiles"
+
