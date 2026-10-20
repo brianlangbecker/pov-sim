@@ -96,7 +96,7 @@ run_loadgen() {
         # Ping GET airlines
         # Invoke error per error rate
         QUERY_PARAMS=""
-        RAND_DEC=($echo "0.$((RANDOM % 100))")
+        RAND_DEC="0.$(printf '%02d' $((RANDOM % 100)))"
         if (( $(echo "$RAND_DEC < $ERROR_RATE" | bc -l) )); then
             QUERY_PARAMS=$GET_AIRLINES_RAISE_QUERY_PARAM
         fi

@@ -123,7 +123,7 @@ run_loadgen() {
         for path in "${GET_FLIGHT_ENDPOINTS[@]}"; do
             # Invoke error per error rate
             QUERY_PARAMS=""
-            RAND_DEC=($echo "0.$((RANDOM % 100))")
+            RAND_DEC="0.$(printf '%02d' $((RANDOM % 100)))"
             if (( $(echo "$RAND_DEC < $ERROR_RATE" | bc -l) )); then
                 QUERY_PARAMS=$GET_FLIGHT_RAISE_QUERY_PARAM
             fi
@@ -138,7 +138,7 @@ run_loadgen() {
             for flight_num in "${POST_FLIGHT_FLIGHT_NUMS[@]}"; do
                 # Invoke error per error rate
                 QUERY_PARAMS="?passenger_name=${passenger}&flight_num=${flight_num}"
-                RAND_DEC=($echo "0.$((RANDOM % 100))")
+                RAND_DEC="0.$(printf '%02d' $((RANDOM % 100)))"
                 if (( $(echo "$RAND_DEC < $ERROR_RATE" | bc -l) )); then
                     QUERY_PARAMS="${QUERY_PARAMS}${POST_FLIGHT_RAISE_QUERY_PARAM}"
                 fi

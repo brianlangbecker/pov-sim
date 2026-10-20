@@ -108,20 +108,16 @@ def _log_access(response):
 # policy. Every flight search (GET /flights/<airline>) and booking
 # (POST /flight) appends here and it's never trimmed, so memory grows
 # monotonically with traffic -- a realistic unbounded-cache leak, not a
-# synthetic allocator. Two different sizes because the two loadgens driving
-# these endpoints have very different throughput:
-#   - flights-loadgen.sh (curl, hits POST /flight) is fast -- 40KB/booking
-#     is sized to stretch the crash out to ~5-10 min under the standard
-#     10x-parallel trigger (verified live: 200KB/booking crossed a 128Mi
-#     limit in ~114s; this is ~5x smaller for a proportionally ~5x longer
-#     runway -- run flights-loadgen.sh with a duration comfortably longer
-#     than that, e.g. -d 600, or the crash won't have sustained traffic to
-#     finish the climb).
-#   - frontend-loadgen.sh (k6 headless-browser clicks, hits GET
-#     /flights/<airline> via the "Get Flights" button) is much slower --
-#     each VU does a full page-load-and-click cycle, so 300KB/search
-#     compensates for far fewer calls per minute (kept at the same ~5x
-#     ratio to the booking size as before).
+# synthetic allocator.
+#
+# Payload sizes (6.7KB/booking, 50KB/search) are deliberately ~6x smaller
+# than earlier (40KB/300KB) so flights-loadgen-parallel.sh can run ~6x more
+# instances (-n 60 instead of -n 10) at roughly the same total leak-rate
+# (bytes/sec), and therefore roughly the same time-to-OOM -- the point is a
+# much higher visible request-rate hitting the real audit-service.record
+# span/leak path, not a faster or slower crash. If you change these sizes
+# again, rescale -n by the inverse ratio to keep crash timing where you want
+# it (see scripts/README.md).
 _booking_history = []
 
 
@@ -203,7 +199,7 @@ def get_flights(airline):
       raise Exception(f"Encountered {status_code} error") # pylint: disable=broad-exception-raised
     operating_airlines = _fetch_operating_airlines()
     random_int = get_random_int(100, 999)
-    _record_audit_event(300_000, airline=airline, result=random_int)
+    _record_audit_event(50_000, airline=airline, result=random_int)
     # Logged here -- while the request span is still active -- rather than
     # relying on werkzeug's own access log line. OTel's WSGI instrumentation
     # ends the span as soon as the response finishes streaming, but werkzeug
@@ -246,7 +242,7 @@ def book_flight():
     passenger_name = request.args.get("passenger_name")
     flight_num = request.args.get("flight_num")
     booking_id = get_random_int(100, 999)
-    _record_audit_event(40_000, booking_id=booking_id, passenger_name=passenger_name, flight_num=flight_num)
+    _record_audit_event(6_700, booking_id=booking_id, passenger_name=passenger_name, flight_num=flight_num)
     _app_logger.info("Booked flight_num=%s booking_id=%s", flight_num, booking_id)
     return jsonify({"passenger_name": passenger_name, "flight_num": flight_num, "booking_id": booking_id}), 200
 
